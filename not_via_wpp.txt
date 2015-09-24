@@ -1,0 +1,150 @@
+﻿Instale as dependencias 
+	# yum install python python-libs python-argparse python-dateutil python-py python-devel
+
+Baixando o Yowsup
+**Criar uma pasta
+	# mkdir yowsup
+	# cd yowsup
+	# wget https://github.com/tgalal/yowsup/archive/master.zip
+	# unzip master.zip
+	# cd yowsup-master
+
+Instalando o Yowsup
+	# ./setup.py install
+
+Ativando o Yowsup
+	# vi /etc/zabbix/zap.conf
+	
+	cc=55              #código do país
+	phone=55239999999  #Seu Celular com código do país e DDD
+	id=Teste Zabbix    #Invente uma ID
+	password=          #Pode deixar a senha em branco pois irá recebe-la quando ativar o Yowsup
+
+Solicitando o código de ativação 
+	# yowsup-cli registration -r sms -c /etc/zabbix/zap.config
+	INFO:yowsup.common.http.warequest:{“status”:”sent”,”length”:6,”method”:”sms”,”retry_after”:1805}	
+	status: sent
+	retry_after: 1805
+	length: 6
+	method: sms
+
+Ativando o Yowsup
+	# yowsup-cli registation -R "CÓDIGO_QUE_RECEBEU" -c /etc/zabbix/zap.config
+	INFO:yowsup.common.http.warequest:{“status”:”ok”,”login”:”554891308167″,”pw”:”29gnQdVaWtg8MJGnN95zj4Md7Ko=”,”type”:”new”,”expiration”:1466600857
+	  ,”kind”:”free”,”price”:”US$0.99″,”cost”:”0.99″,”currency”:”USD”,”price_expiration”:1438164915}
+	status: ok
+	kind: free
+	pw: 29gnQdVaWtg8MJGnN95z34Md7Ko=
+	price: US$0.99
+	price_expiration: 1438164915
+	currency: USD
+	cost: 0.99
+	expiration: 1466600857
+	login: 551199990000
+	type: new
+
+Você recebeu as infos do Yowsup com uma senha, copie essa senha e insira ela no aquivo /etc/zabbix/zap.config
+	#vi /etc/zabbix/zap.config
+	cc=55                       #código do país
+	phone=55239999999           #Seu Celular com código do país e DDD
+	id=Teste Zabbix             #Invente uma ID
+	password=21521WEASFSDAFQWER #Senha que você recebeu
+Salve o arqui e ok hahaha
+
+Agora bora testar
+	# yowsup-cli demos -s "NUME_DESTINO" "MENSAGEM" -c ARQUIVO_CONFIG
+na prática
+	# yowsup-cli demos -s 55115785418 "Teste yowsup" -c /etc/zabbix/zap.config
+
+Criando script para o ZABBIX hahahaha
+	# find / -name alertscripts
+
+Vamos criar o script nesta pasta
+	# vi /usr/lib/zabbix/alertscripts/whatsapp_zabbix.sh
+
+Preencha com o conteúdo
+	# !/bin/sh
+	sudo yowsup-cli demos -s $1 "$3" -c /etc/zabbix/zap.config
+
+Mas somos perfeccionistas vamos de script mais completo
+	#!/bin/bash
+	#
+	# Script para o YowSup para enviar mensagens via WhatsApp
+	LOGFILE=”/tmp/whatsapp.log”
+	DEST=”$1″
+	MSG=”$2″
+	YOWSUP=”/opt/yowsup-master/yowsup-cli”
+	YCONF=”/opt/yowsup-master/yowsup-cli.config”
+	sudo $YOWSUP demos -c $YCONF -s “${DEST}” “${MSG}”
+	HORA=$(date +%d-%m-%Y-%H:%M:%S)
+	echo “$HORA – To: ‘${DEST}’ Text: ‘${MSG}'” >> ${LOGFILE}
+
+Para finalizar vamos dar permissões
+	# chmod +x /usr/lib/zabbix/alertscripts/whatsapp_zabbix.sh
+
+(Lembrando que o zabbix envia as seguintes váriaves ao script:
+ $1 -> Destino
+ $2 -> Assunto
+ $3 -> Mensagem)
+
+Como não usamos assuntos no wpp, vamos então de somente $1 e $3.
+
+Bora testar este script lindo hahaha
+	# cd /usr/lib/zabbix/alertscripts
+	# ./whatsapp_zabbix.sh 55116875413573 "" "Mensagem de teste"
+
+Permissões ao usuário zabbix
+Edite o arquivo /etc/sudoers;
+Adicione o cinteúdo
+	# Permite o user zabbix rodar comandos sem solicitar senha
+	zabbix ALL=NOPASSWD: ALL
+	Defaults:zabbix !requiretty
+
+Agora vem a parte fácil --CONFIGURAR O SCRIPT--
+
+1. No painel do ZABBIX vá em "Adm->Tipos de Midia" e preencha assim:
+	Nome       : Whatsapp Zabbix
+	Tipo       : Script
+	Nome script: whatsapp_zabbix.sh
+
+2. Configurar a Midia do user, "Adm->usr"; no menu drop-down selecione "Usr" selecione o usr desejado e depois a guia "Mídia"; Clique em add e preencha assim:
+	Tipo        : Whatsaoo Zabbix
+	Enviar para : TELEFONE
+	Quando Ativo: 1-7, 00:00-24:00
+	Usar se sev : Media, Alta, Desastre
+	Status      : Ativo
+Clique em add e depois atualizar.
+
+3. Configurando a ação, vá em "CONF->AÇÕES"
+	NOME    : Mensagem Whats
+	ASS PADR: --
+	MSGM PAD: {TRIGGER.STATUS}: {TRIGGER.NAME}
+	MSGM REC: V
+	ASS  REC: --
+	MSGM REC: {TRIGGER.STATUS}: {TRIGGER.NAME}
+
+Vá na aba condições e escolha a trigger que quiser.
+
+Na aba ações clicamos em nova e preenchemos assim:
+	Duração     : 60
+	Op da Action: --
+	Det da OP
+		  Passo DE              : 1
+	                Para            : 1
+			Duração do Passo: 0
+		  Tipo da OP: Enviar Mensagem
+		  Env Gr USR: --
+		  Env AP USR: Admin (Zabbix Administrador)
+		  ENV AP PAR: Whatsapp Zabbix
+		  MSGM PADR : V
+		  Condições : --
+
+Agora clique em add e depois add denovo.
+
+Agora testando hahaha
+(teste em ambiente de teste se quiser manter o emprego ok kkkkkkkkkkkkk)
+
+Pare o server monitorado para dar aquela forçada do trigger e da ação.
+
+(Dando a devida menção: Este foi só um resumo do texto que está na página http://www.blogdomedeiros.com.br/notificacoes-zabbix-via-whatsapp/ do Marcelo Medeiros, o cara conhece muito então fiquem de olhos lá pois tem muita coisa boa.)
+
